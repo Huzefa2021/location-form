@@ -6,6 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="0;url=javascript:window.location.href=window.location.href">
   <title>Auto-Fill Location (Debug Mode)</title>
   <style>
     body { font-family: Arial; padding: 20px; }
@@ -18,7 +19,7 @@
       max-height: 300px;
       overflow-y: auto;
     }
-    #redirectButton {
+    #redirectButton, #retryButton {
       display: none;
       margin: 10px;
       padding: 10px;
@@ -28,22 +29,25 @@
       border-radius: 5px;
       cursor: pointer;
     }
-    #redirectButton:hover { background-color: #0056b3; }
+    #redirectButton:hover, #retryButton:hover {
+      background-color: #0056b3;
+    }
   </style>
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
   <script>
-    let redirectUrl = "https://forms.gle/UxWpzadJUv7eenpm7";
+    let redirectUrl = "";
     let geojsonData = null;
 
     function log(msg) {
       const logBox = document.getElementById("log");
       logBox.textContent += msg + "\n";
+      logBox.scrollTop = logBox.scrollHeight;
       console.log(msg);
     }
 
     async function loadGeoJson() {
       try {
-        const res = await fetch("map.json", { cache: "no-store" });
+        const res = await fetch("map.geojson", { cache: "no-store" });
         geojsonData = await res.json();
         log("GeoJSON data loaded. Total features: " + geojsonData.features.length);
         return true;
@@ -53,26 +57,34 @@
       }
     }
 
+    function isValidPolygon(feature) {
+      return feature && feature.geometry && feature.geometry.type === "Polygon" && feature.geometry.coordinates && feature.geometry.coordinates.length > 0;
+    }
+
     function getWardAndBeat(lat, lon) {
       if (!geojsonData) return { ward: "NA", beat: "NA" };
       const pt = turf.point([lon, lat]);
-      log("Checking against all polygons in map.json...");
+      log("Checking against all polygons in map.geojson...");
       let i = 0;
       for (const feature of geojsonData.features) {
         try {
           const beatName = feature.properties.name || "[Unnamed]";
-          const wardName = feature.properties.Ward || "[No Ward]";
+          const wardName = feature.properties.ward || feature.properties.Ward || "[No Ward]";
+          if (!isValidPolygon(feature)) {
+            log(`⚠ Skipped invalid polygon at index ${i}`);
+            continue;
+          }
           const inside = turf.booleanPointInPolygon(pt, feature);
           log(` → (${++i}) ${beatName} (Ward: ${wardName}): ${inside ? "✔ MATCH" : "✘ not inside"}`);
           if (inside) {
             log("✔ Point lies inside polygon: " + beatName);
             return {
-              ward: feature.properties.Ward || "NA",
-              beat: feature.properties.name || "NA"
+              ward: wardName,
+              beat: beatName
             };
           }
         } catch (e) {
-          log("⚠ Error checking polygon: " + e.message);
+          log(`⚠ Error checking polygon ${i + 1}: ${e.message}`);
         }
       }
       log("❌ Point does not lie in any polygon.");
@@ -81,7 +93,6 @@
 
     async function detectAndRedirect() {
       log("Starting location detection...");
-
       if (!navigator.geolocation) {
         alert("Geolocation is not supported by your browser");
         log("Browser does not support geolocation");
@@ -114,7 +125,6 @@
         }
 
         const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSeo-xlOSxvG0IwtO5MkKaTJZNJkgTsmgZUw-FBsntFlNdRnCw/viewform";
-
         const params = new URLSearchParams({
           "entry.1625337207": zone.ward,
           "entry.1058310891": zone.beat,
@@ -173,7 +183,7 @@
   <h2>Getting your location...</h2>
   <p>Please wait, we are redirecting you to the Google Form.</p>
 
-  <button id="retryButton" onclick="detectAndRedirect()" style="display:none; margin: 10px;">Retry Location Detection</button>
+  <button id="retryButton" onclick="detectAndRedirect()">Retry Location Detection</button>
   <button id="redirectButton" onclick="manualRedirect()">Go to Google Form Now</button>
 
   <div id="log"><strong>Debug Log:</strong>\n</div>
