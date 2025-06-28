@@ -104,17 +104,16 @@
         const lon = position.coords.longitude;
         log(`Location received: Latitude=${lat}, Longitude=${lon}`);
 
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`, {
-          headers: { 'Accept-Language': 'en' }
-        });
-
+        const response = await fetch(`https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lon}&key=9b516f310daa4160917e92a73c1b8771`);
         const data = await response.json();
-        const road = data.address.road || "";
-        const landmark = data.address.neighbourhood || data.address.suburb || data.address.village || data.address.hamlet || "";
-        const town = data.address.town || data.address.city || data.address.county || "";
-        const state = data.address.state || "";
 
-        const fullAddress = [road, landmark, town, state].filter(Boolean).join(", ");
+        const addr = data.results[0]?.components || {};
+        const fullAddress = [
+          addr.road,
+          addr.neighbourhood || addr.suburb || addr.village || addr.hamlet,
+          addr.city 
+        ].filter(Boolean).join(", ");
+
         log(`Reverse geocoded address: ${fullAddress}`);
 
         const zone = getWardAndBeat(lat, lon);
