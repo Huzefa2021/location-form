@@ -59,8 +59,6 @@
         const lon = position.coords.longitude;
         log(`Location received: Latitude=${lat}, Longitude=${lon}`);
 
-        const geoJsonLoaded = await loadGeoJson();
-
         const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`, {
           headers: { 'Accept-Language': 'en' }
         });
@@ -69,7 +67,7 @@
         const address = data.display_name || "";
         log(`Reverse geocoded address: ${address}`);
 
-        const zone = geoJsonLoaded ? getWardAndBeat(lat, lon) : { ward: "NA", beat: "NA" };
+        const zone = getWardAndBeat(lat, lon);
         log(`Detected Ward: ${zone.ward}, Beat: ${zone.beat}`);
 
         const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSeo-xlOSxvG0IwtO5MkKaTJZNJkgTsmgZUw-FBsntFlNdRnCw/viewform";
@@ -117,7 +115,11 @@
       }
     }
 
-    window.onload = detectAndRedirect;
+    window.onload = async () => {
+      const loaded = await loadGeoJson();
+      if (loaded) detectAndRedirect();
+      else log("GeoJSON could not be loaded. Cannot proceed.");
+    };
   </script>
 </head>
 <body>
