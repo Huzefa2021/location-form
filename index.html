@@ -65,7 +65,13 @@
 
         const data = await response.json();
         const address = data.display_name || "";
-        log(`Reverse geocoded address: ${address}`);
+        const road = data.address.road || "";
+        const landmark = data.address.neighbourhood || data.address.suburb || data.address.village || data.address.hamlet || "";
+        const town = data.address.town || data.address.city || data.address.county || "";
+        const state = data.address.state || "";
+
+        const fullAddress = [road, landmark, town, state].filter(Boolean).join(", ");
+        log(`Reverse geocoded address: ${fullAddress}`);
 
         const zone = getWardAndBeat(lat, lon);
         log(`Detected Ward: ${zone.ward}, Beat: ${zone.beat}`);
@@ -75,7 +81,7 @@
         const params = new URLSearchParams({
           "entry.1625337207": zone.ward,
           "entry.1058310891": zone.beat,
-          "entry.1188611077": address,
+          "entry.1188611077": fullAddress,
           "entry.113122688": lat,
           "entry.419288992": lon
         });
