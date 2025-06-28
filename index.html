@@ -9,28 +9,35 @@
   <meta http-equiv="refresh" content="0;url=javascript:window.location.href=window.location.href">
   <title>Auto-Fill Location (Debug Mode)</title>
   <style>
-    body { font-family: Arial; padding: 20px; }
+    body { font-family: Arial; padding: 20px; background: #f0f8ff; }
     #log {
       white-space: pre-line;
-      background: #f5f5f5;
-      padding: 10px;
-      border: 1px solid #ccc;
+      background: #ffffff;
+      padding: 15px;
+      border: 1px solid #007BFF;
+      border-radius: 5px;
       margin-top: 20px;
       max-height: 300px;
       overflow-y: auto;
+      font-size: 14px;
+      color: #333;
     }
     #redirectButton, #retryButton {
       display: none;
       margin: 10px;
-      padding: 10px;
+      padding: 12px 20px;
       background-color: #007BFF;
       color: white;
       border: none;
       border-radius: 5px;
       cursor: pointer;
+      font-size: 16px;
     }
     #redirectButton:hover, #retryButton:hover {
       background-color: #0056b3;
+    }
+    h2, p {
+      color: #0056b3;
     }
   </style>
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
@@ -110,8 +117,9 @@
         const addr = data.results[0]?.components || {};
         const fullAddress = [
           addr.road,
-          addr.neighbourhood || addr.suburb || addr.village || addr.hamlet,
-          addr.city 
+          addr.neighbourhood,
+          addr.suburb,
+          addr.city
         ].filter(Boolean).join(", ");
 
         log(`Reverse geocoded address: ${fullAddress}`);
