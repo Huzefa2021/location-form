@@ -6,11 +6,28 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Auto-Fill Location (Debug Mode)</title>
+  <title>Auto-Fill Location (Debug 5 Mode)</title>
   <style>
     body { font-family: Arial; padding: 20px; }
-    #log { white-space: pre-line; background: #f5f5f5; padding: 10px; border: 1px solid #ccc; margin-top: 20px; }
-    #redirectButton { display: none; margin: 10px; padding: 10px; background-color: #007BFF; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    #log {
+      white-space: pre-line;
+      background: #f5f5f5;
+      padding: 10px;
+      border: 1px solid #ccc;
+      margin-top: 20px;
+      max-height: 300px;
+      overflow-y: scroll;
+    }
+    #redirectButton {
+      display: none;
+      margin: 10px;
+      padding: 10px;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
     #redirectButton:hover { background-color: #0056b3; }
   </style>
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
