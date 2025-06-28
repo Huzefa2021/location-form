@@ -3,56 +3,87 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Auto-Fill Location</title>
+  <title>Auto-Fill Location (Debug Mode)</title>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    #log { white-space: pre-line; background: #f5f5f5; padding: 10px; border: 1px solid #ccc; margin-top: 20px; }
+  </style>
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
   <script>
-    let redirectUrl = "";
+    let redirectUrl = "https://forms.gle/UxWpzadJUv7eenpm7";
+    let geojsonData = null;
 
-    function detectAndRedirect() {
+    function log(msg) {
+      const logBox = document.getElementById("log");
+      logBox.textContent += msg + "\n";
+      console.log(msg);
+    }
+
+    async function loadGeoJson() {
+      try {
+        const res = await fetch("map.geojson");
+        geojsonData = await res.json();
+        log("GeoJSON data loaded.");
+        return true;
+      } catch (e) {
+        log("Failed to load GeoJSON: " + e.message);
+        return false;
+      }
+    }
+
+    function getWardAndBeat(lat, lon) {
+      if (!geojsonData) return { ward: "NA", beat: "NA" };
+      const pt = turf.point([lon, lat]);
+      for (const feature of geojsonData.features) {
+        if (turf.booleanPointInPolygon(pt, feature)) {
+          return {
+            ward: feature.properties.Ward || "NA",
+            beat: feature.properties.name || "NA"
+          };
+        }
+      }
+      return { ward: "NA", beat: "NA" };
+    }
+
+    async function detectAndRedirect() {
+      log("Starting location detection...");
+
       if (!navigator.geolocation) {
         alert("Geolocation is not supported by your browser");
+        log("Browser does not support geolocation");
         return;
       }
 
       navigator.geolocation.getCurrentPosition(async function(position) {
         const lat = position.coords.latitude;
         const lon = position.coords.longitude;
+        log(`Location received: Latitude=${lat}, Longitude=${lon}`);
 
-        // Reverse geocode using Nominatim (OpenStreetMap)
+        const geoJsonLoaded = await loadGeoJson();
+
         const response = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`, {
-          headers: {
-            'Accept-Language': 'en'
-          }
+          headers: { 'Accept-Language': 'en' }
         });
 
         const data = await response.json();
         const address = data.display_name || "";
+        log(`Reverse geocoded address: ${address}`);
 
-        // Optional: Extract ward/beat logic based on address
-        let ward = "";
-        let beat = "";
+        const zone = geoJsonLoaded ? getWardAndBeat(lat, lon) : { ward: "NA", beat: "NA" };
+        log(`Detected Ward: ${zone.ward}, Beat: ${zone.beat}`);
 
-        if (address.includes("Worli")) {
-          ward = "G/S";
-          beat = "4";
-        } else if (address.includes("Kurla")) {
-          ward = "L";
-          beat = "2";
-        }
-        // Add more mappings as required
-
-        // Google Form base URL
         const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSeo-xlOSxvG0IwtO5MkKaTJZNJkgTsmgZUw-FBsntFlNdRnCw/viewform";
 
-        // Construct prefill parameters
         const params = new URLSearchParams({
-          "entry.1625337207": ward,       // Ward
-          "entry.1058310891": beat,       // Beat
-          "entry.1188611077": address,    // Address
-          "entry.113122688": lat,         // Latitude
-          "entry.419288992": lon          // Longitude
+          "entry.1625337207": zone.ward,
+          "entry.1058310891": zone.beat,
+          "entry.1188611077": address,
+          "entry.113122688": lat,
+          "entry.419288992": lon
         });
 
         redirectUrl = `${formUrl}?${params.toString()}`;
+        log("Redirecting to form: " + redirectUrl);
         document.getElementById("manualRedirect").style.display = "inline-block";
         window.location.href = redirectUrl;
 
@@ -68,6 +99,7 @@
           message += error.message;
         }
         alert(message);
+        log("Geolocation error: " + message);
         document.getElementById("retryButton").style.display = "inline-block";
       }, {
         enableHighAccuracy: true,
@@ -81,14 +113,20 @@
         window.location.href = redirectUrl;
       } else {
         alert("Location not yet captured. Please wait or try again.");
+        log("Manual redirect failed – no URL available");
       }
     }
+
+    window.onload = detectAndRedirect;
   </script>
 </head>
 <body>
   <h2>Getting your location...</h2>
   <p>Please wait, we are redirecting you to the Google Form.</p>
+
   <button id="retryButton" onclick="detectAndRedirect()" style="display:none; margin: 10px;">Retry Location Detection</button>
   <button id="manualRedirect" onclick="manualRedirect()" style="display:none; margin: 10px;">Go to Form Manually</button>
+
+  <div id="log"><strong>Debug Log:</strong>\n</div>
 </body>
 </html>
