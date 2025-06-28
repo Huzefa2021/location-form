@@ -21,7 +21,7 @@
 
     async function loadGeoJson() {
       try {
-        const res = await fetch("map.geojson");
+        const res = await fetch("map.json");
         geojsonData = await res.json();
         log("GeoJSON data loaded.");
         return true;
