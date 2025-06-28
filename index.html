@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Auto-Fill Location (version 3)</title>
+  <title>Auto-Fill Location (Debug Mode)</title>
   <style>
     body { font-family: Arial; padding: 20px; }
     #log { white-space: pre-line; background: #f5f5f5; padding: 10px; border: 1px solid #ccc; margin-top: 20px; }
+    #redirectButton { display: none; margin: 10px; padding: 10px; background-color: #007BFF; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    #redirectButton:hover { background-color: #0056b3; }
   </style>
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
   <script>
@@ -36,12 +38,14 @@
       const pt = turf.point([lon, lat]);
       for (const feature of geojsonData.features) {
         if (turf.booleanPointInPolygon(pt, feature)) {
+          log("✔ Point lies inside polygon: " + (feature.properties.name || "[Unnamed]"));
           return {
             ward: feature.properties.Ward || "NA",
             beat: feature.properties.name || "NA"
           };
         }
       }
+      log("❌ Point does not lie in any polygon.");
       return { ward: "NA", beat: "NA" };
     }
 
@@ -64,7 +68,6 @@
         });
 
         const data = await response.json();
-        const address = data.display_name || "";
         const road = data.address.road || "";
         const landmark = data.address.neighbourhood || data.address.suburb || data.address.village || data.address.hamlet || "";
         const town = data.address.town || data.address.city || data.address.county || "";
@@ -75,6 +78,10 @@
 
         const zone = getWardAndBeat(lat, lon);
         log(`Detected Ward: ${zone.ward}, Beat: ${zone.beat}`);
+
+        if (zone.ward === "NA" || zone.beat === "NA") {
+          alert("⚠ Unable to detect ward/beat for your location. Please proceed manually.");
+        }
 
         const formUrl = "https://docs.google.com/forms/d/e/1FAIpQLSeo-xlOSxvG0IwtO5MkKaTJZNJkgTsmgZUw-FBsntFlNdRnCw/viewform";
 
@@ -87,9 +94,13 @@
         });
 
         redirectUrl = `${formUrl}?${params.toString()}`;
-        log("Redirecting to form: " + redirectUrl);
-        document.getElementById("manualRedirect").style.display = "inline-block";
-        window.location.href = redirectUrl;
+        log("Prepared redirect URL: " + redirectUrl);
+        document.getElementById("redirectButton").style.display = "inline-block";
+
+        setTimeout(() => {
+          log("Auto redirecting...");
+          window.location.href = redirectUrl;
+        }, 4000);
 
       }, function(error) {
         let message = "Location access is required to proceed.\n\n";
@@ -133,7 +144,7 @@
   <p>Please wait, we are redirecting you to the Google Form.</p>
 
   <button id="retryButton" onclick="detectAndRedirect()" style="display:none; margin: 10px;">Retry Location Detection</button>
-  <button id="manualRedirect" onclick="manualRedirect()" style="display:none; margin: 10px;">Go to Form Manually</button>
+  <button id="redirectButton" onclick="manualRedirect()">Go to Google Form Now</button>
 
   <div id="log"><strong>Debug Log:</strong>\n</div>
 </body>
