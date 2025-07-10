@@ -8,9 +8,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Auto‑Fill Location (manual)</title>
   <style>
-    body { font-family: Arial, Helvetica, sans-serif; background:#f0f8ff; padding:20px; }
+    body{font-family:Arial,Helvetica,sans-serif;background:#f0f8ff;padding:20px}
     label{display:block;margin-top:10px;color:#0056b3;font-weight:600}
-    input{padding:8px 10px;width:220px;font-size:15px;margin-top:4px;border:1px solid #007BFF;border-radius:4px}
+    textarea{width:280px;height:60px;font-size:15px;padding:8px 10px;border:1px solid #007BFF;border-radius:4px;resize:none}
     #processBtn,#redirectBtn{margin-top:15px;padding:10px 18px;background:#007BFF;color:#fff;border:none;border-radius:5px;font-size:15px;cursor:pointer}
     #processBtn:hover,#redirectBtn:hover{background:#0056b3}
     #log{margin-top:25px;max-height:260px;overflow-y:auto;background:#fff;border:1px solid #007BFF;border-radius:4px;padding:12px;white-space:pre-line;font-size:14px;color:#333}
@@ -18,12 +18,9 @@
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
 </head>
 <body>
-  <h2>Enter Coordinates to Auto‑fill Form</h2>
-  <label>Latitude
-    <input id="latInput" placeholder="e.g. 19.0722226">
-  </label>
-  <label>Longitude
-    <input id="lonInput" placeholder="e.g. 72.8611366">
+  <h2>Enter Coordinates (Any Format)</h2>
+  <label>Coordinates (e.g.  Lat 19.18915°  Long 72.866364° or 19.18915, 72.866364)
+    <textarea id="coordInput" placeholder="Lat 19.18915° Long 72.866364°"></textarea>
   </label>
 
   <button id="processBtn" onclick="processCoords()">Process & Detect Ward/Beat</button>
@@ -34,61 +31,21 @@
 <script>
 let geojsonData=null,redirectUrl="";
 
-function log(m){const l=document.getElementById("log");l.textContent+=m+"\n";l.scrollTop=l.scrollHeight;console.log(m);} // debug helper
+function log(m){const box=document.getElementById("log");box.textContent+=m+"\n";box.scrollTop=box.scrollHeight;console.log(m)}
 
-async function loadGeoJson(){
-  try{
-    const res=await fetch("map.geojson",{cache:"no-store"});
-    geojsonData=await res.json();
-    log("GeoJSON loaded ("+geojsonData.features.length+" features)");
-  }catch(e){log("GeoJSON load error: "+e.message);}
-}
+async function loadGeoJson(){try{const res=await fetch("map.geojson",{cache:"no-store"});geojsonData=await res.json();log("GeoJSON loaded ("+geojsonData.features.length+" features)")}catch(e){log("GeoJSON load error: "+e.message)}}
 
-function cleanNumber(val){const m=(val+"").match(/-?\d+(?:\.\d+)?/);return m?parseFloat(m[0]):NaN;}
+function extractLatLon(text){const nums=text.match(/-?\d+(?:\.\d+)?/g)||[];if(nums.length<2)return{lat:NaN,lon:NaN};return{lat:parseFloat(nums[0]),lon:parseFloat(nums[1])}}
 
-function isValidPolygon(f){return f&&f.geometry&&f.geometry.type==="Polygon"&&f.geometry.coordinates&&f.geometry.coordinates.length;}
+function isValidPolygon(f){return f&&f.geometry&&f.geometry.type==="Polygon"&&f.geometry.coordinates&&f.geometry.coordinates.length}
 
-function getWardBeat(lat,lon){if(!geojsonData) return {ward:"NA",beat:"NA"};
-  const pt=turf.point([lon,lat]);
-  for(const f of geojsonData.features){try{
-        if(!isValidPolygon(f)) continue;
-        if(turf.booleanPointInPolygon(pt,f))
-          return {ward:f.properties.ward||f.properties.Ward||"NA",beat:f.properties.name||"NA"};
-  }catch(_){}}
-  return {ward:"NA",beat:"NA"};
-}
+function getWardBeat(lat,lon){if(!geojsonData)return{ward:"NA",beat:"NA"};const pt=turf.point([lon,lat]);for(const f of geojsonData.features){try{if(!isValidPolygon(f))continue;if(turf.booleanPointInPolygon(pt,f))return{ward:f.properties.ward||f.properties.Ward||"NA",beat:f.properties.name||"NA"}}catch(_){} }return{ward:"NA",beat:"NA"}}
 
-async function processCoords(){
-  const lat=cleanNumber(document.getElementById("latInput").value);
-  const lon=cleanNumber(document.getElementById("lonInput").value);
-  if(isNaN(lat)||isNaN(lon)){alert("Please enter valid numeric coordinates");return;}
-  log("Coordinates accepted → Lat:"+lat+", Lon:"+lon);
+async function processCoords(){const raw=document.getElementById("coordInput").value;const {lat,lon}=extractLatLon(raw);if(isNaN(lat)||isNaN(lon)){alert("Please enter valid coordinates");return;}log("Coordinates accepted → Lat:"+lat+", Lon:"+lon);
 
-  // Reverse geocode via OpenCage
-  let fullAddr="";
-  try{
-    const res=await fetch(`https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lon}&key=9b516f310daa4160917e92a73c1b8771&no_annotations=1`);
-    const data=await res.json();
-    const c=data.results[0]?.components||{};
-    fullAddr=[c.road,c.neighbourhood,c.suburb,c.city].filter(Boolean).join(", ");
-    log("Reverse geocoded address: "+fullAddr);
-  }catch(e){log("Reverse geocode failed: "+e.message);}
+let fullAddr="";try{const res=await fetch(`https://api.opencagedata.com/geocode/v1/json?q=${lat}+${lon}&key=9b516f310daa4160917e92a73c1b8771&no_annotations=1`);const data=await res.json();const c=data.results[0]?.components||{};fullAddr=[c.road,c.neighbourhood,c.suburb,c.city].filter(Boolean).join(", ");log("Reverse geocoded address: "+fullAddr);}catch(e){log("Reverse geocode failed: "+e.message);}const zone=getWardBeat(lat,lon);log(`Detected Ward: ${zone.ward}, Beat: ${zone.beat}`);
 
-  const zone=getWardBeat(lat,lon);
-  log(`Detected Ward: ${zone.ward}, Beat: ${zone.beat}`);
-
-  const formUrl="https://docs.google.com/forms/d/e/1FAIpQLSeo-xlOSxvG0IwtO5MkKaTJZNJkgTsmgZUw-FBsntFlNdRnCw/viewform";
-  const params=new URLSearchParams({
-    "entry.1625337207":zone.ward,
-    "entry.1058310891":zone.beat,
-    "entry.1188611077":fullAddr,
-    "entry.113122688":lat,
-    "entry.419288992":lon
-  });
-  redirectUrl=`${formUrl}?${params.toString()}`;
-  log("Prepared redirect URL: "+redirectUrl);
-  document.getElementById("redirectBtn").style.display="inline-block";
-}
+const formUrl="https://docs.google.com/forms/d/e/1FAIpQLSeo-xlOSxvG0IwtO5MkKaTJZNJkgTsmgZUw-FBsntFlNdRnCw/viewform";const params=new URLSearchParams({"entry.1625337207":zone.ward,"entry.1058310891":zone.beat,"entry.1188611077":fullAddr,"entry.113122688":lat,"entry.419288992":lon});redirectUrl=`${formUrl}?${params.toString()}`;log("Prepared redirect URL: "+redirectUrl);document.getElementById("redirectBtn").style.display="inline-block";}
 
 window.onload=loadGeoJson;
 </script>
