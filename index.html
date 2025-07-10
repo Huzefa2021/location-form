@@ -7,31 +7,54 @@
   <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Auto‑Fill Via GPS‑Photo OCR</title>
-
-  <!-- Tesseract.js (browser OCR) -->
   <script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
-
   <style>
     body{font-family:Arial,Helvetica;background:#f0f8ff;padding:22px}
     h2{color:#0056b3}
-    input[type=file]{margin:14px 0}
+    #dropZone{
+      border:2px dashed #007BFF;border-radius:6px;height:160px;display:flex;align-items:center;justify-content:center;
+      color:#007BFF;font-size:16px;background:#eaf3ff;cursor:pointer;margin-bottom:14px
+    }
+    #dropZone.hover{background:#d0e4ff}
+    #fileInput{display:none}
     button{padding:10px 20px;margin-top:12px;background:#007BFF;color:#fff;border:none;border-radius:5px;font-size:15px;cursor:pointer}
     button:hover{background:#0056b3}
-    #log{margin-top:22px;max-height:280px;overflow-y:auto;background:#fff;border:1px solid #007BFF;border-radius:4px;padding:12px;white-space:pre-line;font-size:14px;color:#333}
+    #log{margin-top:22px;max-height:300px;overflow-y:auto;background:#fff;border:1px solid #007BFF;border-radius:4px;padding:12px;white-space:pre-line;font-size:14px;color:#333}
     #redirectBtn{display:none}
   </style>
 </head>
 <body>
-  <h2>1️⃣ Upload GPS‑stamped Photo</h2>
-  <input type="file" id="imgFile" accept="image/*" />
+  <h2>Upload GPS‑stamped Photo (Drag‑&‑Drop or Browse)</h2>
+  <div id="dropZone" onclick="document.getElementById('fileInput').click();">
+    📂 Drag image here or click to browse
+  </div>
+  <input type="file" id="fileInput" accept="image/*" />
+
   <button onclick="runOCR()">Extract & Detect</button>
   <button id="redirectBtn" onclick="window.location.href=redirectUrl">Go to Google Form</button>
 
   <div id="log"><strong>Debug Log:</strong>\n</div>
 
 <script>
-let geojsonData=null, redirectUrl="";
+let geojsonData=null,redirectUrl="",selectedFile=null;
+
+const dropZone=document.getElementById('dropZone');
+const fileInput=document.getElementById('fileInput');
+
+['dragenter','dragover'].forEach(evt=>dropZone.addEventListener(evt,e=>{e.preventDefault();e.stopPropagation();dropZone.classList.add('hover');}));
+['dragleave','dragend','drop'].forEach(evt=>dropZone.addEventListener(evt,e=>{e.preventDefault();e.stopPropagation();dropZone.classList.remove('hover');}));
+
+dropZone.addEventListener('drop',e=>{
+  selectedFile=e.dataTransfer.files[0];
+  fileInput.files=e.dataTransfer.files; // sync for consistency
+  log('File selected: '+selectedFile.name);
+});
+
+fileInput.addEventListener('change',e=>{
+  selectedFile=e.target.files[0];
+  if(selectedFile) log('File selected: '+selectedFile.name);
+});
 
 function log(m){const box=document.getElementById('log');box.textContent+=m+'\n';box.scrollTop=box.scrollHeight;console.log(m)}
 
@@ -43,23 +66,20 @@ function getWardBeat(lat,lon){if(!geojsonData)return{ward:'NA',beat:'NA'};const 
 function extractData(text){const latlon=text.match(/Lat\s*([\d\.]+)[^\d]+Long\s*([\d\.]+)/i);
   const dt=text.match(/(\d{2}\/\d{2}\/\d{4}).*?(\d{2}:\d{2}\s*[AP]M)/i);
   const addr=text.match(/\d+.*Mumbai.*\d{6}/i);
-  return {lat:latlon?parseFloat(latlon[1]):NaN, lon:latlon?parseFloat(latlon[2]):NaN, date:dt?dt[1]:'', time:dt?dt[2]:'', address:addr?addr[0]:''}; }
+  return{lat:latlon?parseFloat(latlon[1]):NaN,lon:latlon?parseFloat(latlon[2]):NaN,date:dt?dt[1]:'',time:dt?dt[2]:'',address:addr?addr[0]:''};}
 
-async function runOCR(){const file=document.getElementById('imgFile').files[0];if(!file){alert('Select an image first');return;}
+async function runOCR(){if(!selectedFile){alert('Please select/drag an image first');return;}
   log('⏳ OCR running …');
-  const {data:{text}}=await Tesseract.recognize(await file.arrayBuffer(),'eng',{logger:m=>log(m.status+' '+(m.progress*100).toFixed(0)+'%')});
-  log('\n--- OCR TEXT ---\n'+text+'\n----------------');
+  const {data:{text}}=await Tesseract.recognize(await selectedFile.arrayBuffer(),'eng',{logger:m=>{if(m.status!=='done')log(m.status+' '+(m.progress*100).toFixed(0)+'%');}});
+  log('\n--- OCR TEXT ---\n'+text+'\n---------------');
   const data=extractData(text);
-  if(isNaN(data.lat)||isNaN(data.lon)){alert('Latitude / Longitude not found in image overlay');return;}
+  if(isNaN(data.lat)||isNaN(data.lon)){alert('Latitude / Longitude not found');return;}
   log(`Parsed → Lat:${data.lat}, Lon:${data.lon}, Date:${data.date}, Time:${data.time}`);
 
   const zone=getWardBeat(data.lat,data.lon);
   log(`Detected Ward: ${zone.ward}, Beat: ${zone.beat}`);
-
-  // Reverse geocode optional (skip API to stay free) – we already have address from overlay
   const fullAddr=data.address;
 
-  // build Google‑Form pre‑fill
   const form='https://docs.google.com/forms/d/e/1FAIpQLSeo-xlOSxvG0IwtO5MkKaTJZNJkgTsmgZUw-FBsntFlNdRnCw/viewform';
   const params=new URLSearchParams({
     'entry.1625337207':zone.ward,
@@ -67,11 +87,11 @@ async function runOCR(){const file=document.getElementById('imgFile').files[0];i
     'entry.1188611077':fullAddr,
     'entry.113122688':data.lat,
     'entry.419288992':data.lon,
-    'entry.1911996449':data.date+' '+data.time  // Date & Time (photo overlay)
+    'entry.1911996449':data.date+' '+data.time
   });
   redirectUrl=`${form}?${params.toString()}`;
   log('Prepared redirect URL');
-  document.getElementById('redirectBtn').style.display='inline-block'; }
+  document.getElementById('redirectBtn').style.display='inline-block';}
 
 window.onload=loadGeoJson;
 </script>
